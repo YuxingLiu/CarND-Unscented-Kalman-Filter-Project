@@ -58,6 +58,9 @@ UKF::UKF() {
   // initially set to false, set to true in first call of ProcessMeasurement
   is_initialized_ = false;
 
+  //time when the state is true, in us
+  time_us_ = 0;
+
   // State dimension
   n_x_ = 5;
   // Augmented state dimension
@@ -72,7 +75,7 @@ UKF::UKF() {
   // Weights of sigma points
   weights_ = VectorXd(2*n_aug_ + 1);
   weights_(0) = lambda_ / (lambda_ + n_aug_);
-  weights_.tail(2*n_aug_).fill(0.5 / (lambda_+n_aug_));  
+  weights_.tail(2*n_aug_).fill(0.5 / (lambda_+n_aug_));
 }
 
 UKF::~UKF() {}
@@ -88,6 +91,66 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
   Complete this function! Make sure you switch between lidar and radar
   measurements.
   */
+
+  /*****************************************************************************
+   *  Initialization
+   ****************************************************************************/
+
+   if (!is_initialized_) {
+    // first measurement
+    if (meas_package.sensor_type_ == MeasurementPackage::RADAR) {
+      // Convert radar from polar to cartesian coordinates and initialize state
+      float rho0 = meas_package.raw_measurements_(0);
+      float phi0 = meas_package.raw_measurements_(1);
+      float px0 = rho0 * cos(phi0);
+      float py0 = rho0 * sin(phi0);
+      x_ << px0, py0, 0, 0, 0;
+    } else if (meas_package.sensor_type_ == MeasurementPackage::LASER) {
+      // initialize state
+      float px0 = meas_package.raw_measurements_(0);
+      float py0 = meas_package.raw_measurements_(1);
+      x_ << px0, py0, 0, 0, 0;
+    }
+
+    // initialize state covariance matrix
+    P_ << 1, 0, 0, 0, 0,
+          0, 1, 0, 0, 0,
+          0, 0, 100, 0, 0,
+          0, 0, 0, 100, 0,
+          0, 0, 0, 0, 100;
+
+    time_us_ = meas_package.timestamp_;
+    is_initialized_ = true;
+    return;
+  }
+
+
+  /*****************************************************************************
+   *  Prediction
+   ****************************************************************************/
+
+  // calculate the elapsed time
+  float dt = (meas_package.timestamp_ - time_us_) / 1000000.0;
+  time_us_ = meas_package.timestamp_;
+
+  // predict the state and the state covariance matrix
+  Prediction(dt);
+
+  /*****************************************************************************
+   *  Update
+   ****************************************************************************/
+
+  if (meas_package.sensor_type_ == MeasurementPackage::RADAR) {
+    // Radar update
+    UpdateRadar(meas_package);
+  } else if (meas_package.sensor_type_ == MeasurementPackage::LASER) {
+    // Laser update
+    UpdateLidar(meas_package);
+  }
+
+  // print the output
+  cout << "x_ = " << x_ << endl;
+  cout << "P_ = " << P_ << endl;
 }
 
 /**
