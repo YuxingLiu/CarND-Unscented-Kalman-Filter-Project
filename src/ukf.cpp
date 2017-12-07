@@ -165,6 +165,90 @@ void UKF::Prediction(double delta_t) {
   Complete this function! Estimate the object's location. Modify the state
   vector, x_. Predict sigma points, the state, and the state covariance matrix.
   */
+
+  /*****************************************************************************
+   *  Generate Sigma Points
+   ****************************************************************************/
+
+  // augmented mean state
+  VectorXd x_aug = VectorXd(n_aug_);
+  x_aug.head(n_x_) = x_;
+  x_aug.tail(2).fill(0.0);
+
+  // augmented state covariance
+  MatrixXd P_aug = MatrixXd(n_aug_, n_aug_);
+  P_aug.fill(0.0);
+  P_aug.topLeftCorner(n_x_, n_x_) = P_;
+  P_aug(n_x_, n_x_) = std_a_ * std_a_;
+  P_aug(n_x_+1, n_x_+1) = std_yawdd_ * std_yawdd_;
+
+  // square root of covariance matrix
+  MatrixXd L = P_aug.llt().matrixL();
+
+  // augmented sigma points
+  MatrixXd Xsig_aug = MatrixXd(n_aug_, 2 * n_aug_ + 1);
+  Xsig_aug.col(0) = x_aug;
+  Xsig_aug.block(0, 1, n_aug_, n_aug_) = x_aug.replicate(1, n_aug_)
+                                         + sqrt(lambda_ + n_aug_) * L;
+  Xsig_aug.block(0, n_aug_+1, n_aug_, n_aug_) = x_aug.replicate(1, n_aug_)
+                                                - sqrt(lambda_ + n_aug_) * L;
+
+  /*****************************************************************************
+   *  Predict Sigma Points
+   ****************************************************************************/
+
+  double delta_t2 = delta_t * delta_t;
+
+  for(int i = 0; i < 2*n_aug_ + 1; i++) {
+    VectorXd x_aug = Xsig_aug.col(i);
+    VectorXd f_k(n_x_);
+    VectorXd nu_k(n_x_);
+
+    // calculate f_k
+    if (x_aug(4) != 0) {
+        f_k <<  x_aug(2)/x_aug(4) * ( sin(x_aug(3)+x_aug(4)*delta_t) - sin(x_aug(3)) ),
+                x_aug(2)/x_aug(4) * (-cos(x_aug(3)+x_aug(4)*delta_t) + cos(x_aug(3)) ),
+                0,
+                x_aug(4) * delta_t,
+                0;
+    } else { //avoid division by zero
+        f_k <<  x_aug(2) * cos(x_aug(3)) * delta_t,
+                x_aug(2) * sin(x_aug(3)) * delta_t,
+                0,
+                x_aug(4) * delta_t,
+                0;
+    }
+
+    // calculate nu_k
+    nu_k << 0.5 * delta_t2 * cos(x_aug(3)) * x_aug(5),
+            0.5 * delta_t2 * sin(x_aug(3)) * x_aug(5),
+            delta_t * x_aug(5),
+            0.5 * delta_t2 * x_aug(6),
+            delta_t * x_aug(6);
+
+    // calculate predicted sigma point
+    Xsig_pred_.col(i) = x_aug.head(n_x_) + f_k + nu_k;
+  }
+
+  /*****************************************************************************
+   *  Predict Mean and Covariance
+   ****************************************************************************/
+
+  // predict mean state
+  x_ = Xsig_pred_ * weights_;
+
+  // predict state covariance
+  P_.fill(0.0);
+  for(int i = 0; i < 2*n_aug_ + 1; i++) {
+    // state difference
+    VectorXd x_diff = Xsig_pred_.col(i) - x_;
+
+    // angle normalization
+    while (x_diff(3)> M_PI) x_diff(3)-=2.*M_PI;
+    while (x_diff(3)<-M_PI) x_diff(3)+=2.*M_PI;
+
+    P_ += weights_(i) * x_diff * x_diff.transpose();
+  }
 }
 
 /**
