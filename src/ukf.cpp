@@ -264,6 +264,69 @@ void UKF::UpdateLidar(MeasurementPackage meas_package) {
 
   You'll also need to calculate the lidar NIS.
   */
+
+  /*****************************************************************************
+   *  Predict Lidar Measurement
+   ****************************************************************************/
+
+  // measurement dimension - laser
+  int n_z = 2;
+
+  // measurement matrix  - laser
+  MatrixXd H_laser = MatrixXd(n_z, n_x_);
+  H_laser << 1, 0, 0, 0, 0,
+             0, 1, 0, 0, 0;
+
+  // transform sigma points into measurement space
+  MatrixXd Zsig = H_laser * Xsig_pred_;
+
+  // calculate mean predicted measurement
+  VectorXd z_pred = Zsig * weights_;
+
+  // calculate measurement covariance matrix S and cross correlation matrix Tc
+  MatrixXd R = MatrixXd(n_z, n_z);
+  R << std_laspx_ * std_laspx_, 0,
+       0, std_laspy_ * std_laspy_;
+  MatrixXd S = R;
+
+  MatrixXd Tc = MatrixXd(n_x_, n_z);
+  Tc.fill(0.0);
+
+  for(int i = 0; i < 2*n_aug_ + 1; i++) {
+    // residual
+    VectorXd z_diff = Zsig.col(i) - z_pred;
+    VectorXd x_diff = Xsig_pred_.col(i) - x_;
+
+    // angle normalization
+    while (z_diff(1) > M_PI) z_diff(1) -= 2.*M_PI;
+    while (z_diff(1) <-M_PI) z_diff(1) += 2.*M_PI;
+    while (x_diff(3) > M_PI) x_diff(3) -= 2.*M_PI;
+    while (x_diff(3) <-M_PI) x_diff(3) += 2.*M_PI;
+
+    S += weights_(i) * z_diff * z_diff.transpose();
+    Tc+= weights_(i) * x_diff * z_diff.transpose();
+  }
+
+  /*****************************************************************************
+   *  Update
+   ****************************************************************************/
+
+  // new measurement
+  VectorXd z = meas_package.raw_measurements_;
+
+  // calculate Kalman gain K
+  MatrixXd K = Tc * S.inverse();
+
+  // residule
+  VectorXd z_diff = z - z_pred;
+
+  // angle normalization
+  while (z_diff(1) > M_PI) z_diff(1) -= 2.*M_PI;
+  while (z_diff(1) <-M_PI) z_diff(1) += 2.*M_PI;
+
+  //update state mean and covariance matrix
+  x_ += K * z_diff;
+  P_ += -K * S * K.transpose();
 }
 
 /**
