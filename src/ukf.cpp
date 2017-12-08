@@ -140,10 +140,10 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
    *  Update
    ****************************************************************************/
 
-  if (meas_package.sensor_type_ == MeasurementPackage::RADAR) {
+  if (meas_package.sensor_type_ == MeasurementPackage::RADAR && use_radar_) {
     // Radar update
     UpdateRadar(meas_package);
-  } else if (meas_package.sensor_type_ == MeasurementPackage::LASER) {
+  } else if (meas_package.sensor_type_ == MeasurementPackage::LASER && use_laser_) {
     // Laser update
     UpdateLidar(meas_package);
   }
@@ -327,6 +327,10 @@ void UKF::UpdateLidar(MeasurementPackage meas_package) {
   // update state mean and covariance matrix
   x_ += K * z_diff;
   P_ += -K * S * K.transpose();
+
+  // calculate lidar NIS
+  double NIS_laser = z_diff.transpose() * S.inverse() * z_diff;
+  cout << "NIS Lidar = " << NIS_laser << endl;
 }
 
 /**
@@ -414,4 +418,8 @@ void UKF::UpdateRadar(MeasurementPackage meas_package) {
   // update state mean and covariance matrix
   x_ += K * z_diff;
   P_ += -K * S * K.transpose();
+
+  // calculate radar NIS
+  double NIS_radar = z_diff.transpose() * S.inverse() * z_diff;
+  cout << "NIS Radar = " << NIS_radar << endl;
 }
