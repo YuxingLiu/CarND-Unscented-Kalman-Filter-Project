@@ -205,7 +205,7 @@ void UKF::Prediction(double delta_t) {
     VectorXd nu_k(n_x_);
 
     // calculate f_k
-    if (x_aug(4) != 0) {
+    if (x_aug(4) > 0.001) {
         f_k <<  x_aug(2)/x_aug(4) * ( sin(x_aug(3)+x_aug(4)*delta_t) - sin(x_aug(3)) ),
                 x_aug(2)/x_aug(4) * (-cos(x_aug(3)+x_aug(4)*delta_t) + cos(x_aug(3)) ),
                 0,
@@ -298,8 +298,6 @@ void UKF::UpdateLidar(MeasurementPackage meas_package) {
     VectorXd x_diff = Xsig_pred_.col(i) - x_;
 
     // angle normalization
-    while (z_diff(1) > M_PI) z_diff(1) -= 2.*M_PI;
-    while (z_diff(1) <-M_PI) z_diff(1) += 2.*M_PI;
     while (x_diff(3) > M_PI) x_diff(3) -= 2.*M_PI;
     while (x_diff(3) <-M_PI) x_diff(3) += 2.*M_PI;
 
@@ -320,17 +318,13 @@ void UKF::UpdateLidar(MeasurementPackage meas_package) {
   // residual
   VectorXd z_diff = z - z_pred;
 
-  // angle normalization
-  while (z_diff(1) > M_PI) z_diff(1) -= 2.*M_PI;
-  while (z_diff(1) <-M_PI) z_diff(1) += 2.*M_PI;
-
   // update state mean and covariance matrix
   x_ += K * z_diff;
   P_ += -K * S * K.transpose();
 
   // calculate lidar NIS
   double NIS_laser = z_diff.transpose() * S.inverse() * z_diff;
-  cout << "NIS Lidar = " << NIS_laser << endl;
+  cout << "NIS Lidar = " << NIS_laser / 5.991 << endl;
 }
 
 /**
@@ -421,5 +415,5 @@ void UKF::UpdateRadar(MeasurementPackage meas_package) {
 
   // calculate radar NIS
   double NIS_radar = z_diff.transpose() * S.inverse() * z_diff;
-  cout << "NIS Radar = " << NIS_radar << endl;
+  cout << "NIS Radar = " << NIS_radar / 7.815 << endl;
 }
